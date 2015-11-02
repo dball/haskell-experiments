@@ -60,6 +60,10 @@ nearbyPoints game point =
         apply = \(fx, fy) -> (fx r, fy c)
         (r, c) = point
 
+winning cell = (visible cell && (not . mine) cell) || (flagged cell && mine cell)
+
+won game = all winning $ toList $ board game
+
 explore game point
   | mine cell = game' { outcome = Just False }
   | nearbyMines cell == 0 = foldl explore game' nearby
