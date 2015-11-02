@@ -19,18 +19,52 @@ instance Show Cell where
 
 emptyCell = Cell False 0 False False
 
-data Game = Game { board :: Matrix Cell }
+data Game = Game { board :: Matrix Cell,
+                   outcome :: Maybe Bool  }
 
 instance Show Game where
   show game = show $ board game
 
-newGame rows cols = Game $ matrix rows cols $ \_ -> emptyCell
+plantMine game point = foldl addNearbyMine game' nearby
+  where game' = updateCell (\c -> c { mine = True }) game point
+        nearby = nearbyPoints game point
+        addNearbyMine = updateCell $ \c -> c { nearbyMines = succ $ nearbyMines c }
 
-plantFlag game point = updateElem cells addFlag point
-                       where cells = board game
-                             addFlag = (\c -> c { flagged = True })
+newGame rows cols mines =
+  foldl plantMine game mines
+  where game = Game board Nothing
+        board = matrix rows cols $ \_ -> emptyCell
 
-retractFlag game point = updateElem cells removeFlag point
-                         where cells = board game
-                               removeFlag = (\c -> c { flagged = False })
-                               
+updateCell f game point = game { board = updateElem (board game) f point }
+
+viewCell game point = getElem r c (board game)
+                      where (r, c) = point
+
+plantFlag = updateCell $ \c -> c { flagged = True }
+
+retractFlag = updateCell $ \c -> c { flagged = False }
+
+nearbyPoints game point =
+  filter inbounds $ map apply deltas
+  where inbounds = \(r, c) -> r > 0 && c > 0 && r <= rows && c <= cols
+        rows = nrows (board game)
+        cols = ncols (board game)
+        deltas = [(pred, pred),
+                  (pred, id),
+                  (pred, succ),
+                  (succ, pred),
+                  (succ, id),
+                  (succ, succ),
+                  (id, pred),
+                  (id, succ)]
+        apply = \(fx, fy) -> (fx r, fy c)
+        (r, c) = point
+
+explore game point
+  | mine cell = game' { outcome = Just False }
+  | nearbyMines cell == 0 = foldl explore game' nearby
+  | otherwise = game'
+  where game' = updateCell (\c -> c { visible = True }) game point
+        cell = viewCell game' point
+        nearby = filter (unexplored game) (nearbyPoints game point)
+        unexplored = \game point -> not . visible $ viewCell game point
